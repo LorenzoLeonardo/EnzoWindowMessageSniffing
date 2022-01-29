@@ -26,9 +26,10 @@ public:
 
 // Implementation
 protected:
-	bool shiftPressed;
-	bool capsLockOn;
-	CString TranslateKeypressed(CString);
+	bool m_shiftPressed;
+	bool m_capsLockOn;
+	bool m_controlPressed;
+
 	HICON m_hIcon;
 	HMODULE dll_handle;
 	// Generated message map functions

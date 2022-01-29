@@ -102,8 +102,9 @@ BOOL CEnzoWindowMessageSniffingDlg::OnInitDialog()
 	SetIcon(m_hIcon, FALSE);		// Set small icon
 
 	// TODO: Add extra initialization here
-	shiftPressed = GetKeyState(VK_SHIFT);
-	capsLockOn = GetKeyState(VK_CAPITAL);
+	m_shiftPressed = false;
+	m_controlPressed = false;
+	m_capsLockOn = GetKeyState(VK_CAPITAL);
 
 	HHOOK process_hook;
 	dll_handle = LoadLibrary(_T("EnzoSniffingDLL.dll"));
@@ -117,114 +118,122 @@ BOOL CEnzoWindowMessageSniffingDlg::OnInitDialog()
 	installProc(m_hWnd);
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
-CString CEnzoWindowMessageSniffingDlg::TranslateKeypressed(CString csStr)
-{
-	if (!csStr.Compare(_T("Enter")) || !csStr.Compare(_T("Num Enter")))
-		return _T("Enter");
-	else if (!csStr.Compare(_T(".")) || !csStr.Compare(_T("Num Del")))
-		return _T(".");
-	else if (!csStr.Compare(_T("Space")))
-		return _T("Space");
-	else if (!csStr.Compare(_T("Num 1")))
-		return _T("1");
-	else if (!csStr.Compare(_T("Num 2")))
-		return _T("2");
-	else if (!csStr.Compare(_T("Num 3")))
-		return _T("3");
-	else if (!csStr.Compare(_T("Num 4")))
-		return _T("4");
-	else if (!csStr.Compare(_T("Num 5")))
-		return _T("5");
-	else if (!csStr.Compare(_T("Num 6")))
-		return _T("6");
-	else if (!csStr.Compare(_T("Num 7")))
-		return _T("7");
-	else if (!csStr.Compare(_T("Num 8")))
-		return _T("8");
-	else if (!csStr.Compare(_T("Num 9")))
-		return _T("9");
-	else if (!csStr.Compare(_T("Num 0")))
-		return _T("0");
-	else
-		return csStr;
-}
+
 LRESULT CEnzoWindowMessageSniffingDlg::OnUserDefinedMessage(WPARAM wParam, LPARAM lParam)
 {
 	KBDLLHOOKSTRUCT hooked = *((KBDLLHOOKSTRUCT*)lParam);
 	TCHAR charPressed = hooked.vkCode;
-	
-	shiftPressed = GetKeyState(VK_SHIFT);
-	capsLockOn = GetKeyState(VK_CAPITAL);
+	CString csWin = _T("");
+
+	m_capsLockOn = GetKeyState(VK_CAPITAL);
 
 	if ((wParam == WM_SYSKEYDOWN) || (wParam == WM_KEYDOWN))
 	{
-		if (hooked.vkCode == VK_LSHIFT || hooked.vkCode == VK_RSHIFT)
+		if (!m_controlPressed)
 		{
-			shiftPressed = true;
-		}
-		else if (hooked.vkCode == VK_CAPITAL)
-		{
-			capsLockOn = true;
-		}
-		else
-		{
-			
-			if ((0 != isalpha(charPressed)) && (shiftPressed ^ capsLockOn))
+			if (hooked.vkCode == VK_LSHIFT || hooked.vkCode == VK_RSHIFT)
 			{
-				charPressed = tolower(charPressed);
+				m_shiftPressed = true;
 			}
-		}
-
-		DWORD dwMsg = 1;
-		dwMsg += hooked.scanCode << 16;
-		dwMsg += hooked.flags << 24;
-
-		TCHAR key[16];
-		GetKeyNameText(dwMsg, key, 15);
-
-		CString csStr;
-		CString csWin;
-
-		
-		csStr = TranslateKeypressed(key);		
-		if (!csStr.Compare(_T("Backspace")))
-		{
-			m_ctrlEditArea.GetWindowText(csWin);
-			if (csWin.GetLength() > 0)
+			else if (hooked.vkCode == VK_CAPITAL)
 			{
-				csWin.Delete(csWin.GetLength() - 1, 1);
+				m_capsLockOn = true;
+			}
+			else if ((hooked.vkCode >= VK_LCONTROL) && (hooked.vkCode <= VK_RCONTROL))
+			{
+				m_controlPressed = true;
+			}
+			else if (hooked.vkCode == VK_BACK)
+			{
+				m_ctrlEditArea.GetWindowText(csWin);
+				if (csWin.GetLength() > 0)
+				{
+					csWin.Delete(csWin.GetLength() - 1, 1);
+					m_ctrlEditArea.SetWindowText(csWin);
+				}
+			}
+			else if (hooked.vkCode == VK_RETURN)
+			{
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin += _T("\r\n");
 				m_ctrlEditArea.SetWindowText(csWin);
 			}
+			else if ((hooked.vkCode >= 0x30) && (hooked.vkCode <= 0x39))
+			{
+				char key[] = {')','!','@' ,'#' ,'$' ,'%' ,'^' ,'&' ,'*' ,'(' };
+
+				if (m_shiftPressed)
+					charPressed = key[hooked.vkCode - 0x30];
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + charPressed;
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+			else if ((hooked.vkCode >= 0x41) && (hooked.vkCode <= 0x5A))
+			{
+				if ((0 != isalpha(charPressed)) && !(m_shiftPressed ^ m_capsLockOn))
+				{
+					charPressed = tolower(charPressed);
+				}
+
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + charPressed;
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+			//num keys
+			else if ((hooked.vkCode >= VK_NUMPAD0) && (hooked.vkCode <= VK_NUMPAD9))
+			{
+				char key[] = { '0','1','2','3', '4','5','6','7','8','9' };
+
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + key[hooked.vkCode - VK_NUMPAD0];
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+			else if ((hooked.vkCode >= VK_MULTIPLY) && (hooked.vkCode <= VK_DIVIDE))
+			{
+				char key[] = { '*','+','/','-', '.','/' };
+
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + key[hooked.vkCode - VK_MULTIPLY];
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+
+			else if (hooked.vkCode == VK_SPACE)
+			{
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + _T(" ");
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+			else if (hooked.vkCode == VK_TAB)
+			{
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + _T("\t");
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+			else
+			{
+				m_ctrlEditArea.GetWindowText(csWin);
+				csWin = csWin + charPressed;
+				m_ctrlEditArea.SetWindowText(csWin);
+			}
+
+			m_ctrlEditArea.SetFocus();
+			m_ctrlEditArea.SetSel(-1);
 		}
-		else if (!csStr.Compare(_T("Enter")))
-		{
-			m_ctrlEditArea.GetWindowText(csWin);
-			csWin += _T("\r\n");
-			m_ctrlEditArea.SetWindowText(csWin);
-		}
-		else if(isalnum(charPressed))
-		{
-			m_ctrlEditArea.GetWindowText(csWin);
-			csWin = csWin + csStr;
-			m_ctrlEditArea.SetWindowText(csWin);
-		}
-		else if (!csStr.Compare(_T(".")) || !csStr.Compare(_T("0")))
-		{
-			m_ctrlEditArea.GetWindowText(csWin);
-			csWin = csWin + csStr;
-			m_ctrlEditArea.SetWindowText(csWin);
-		}
-		
+
 	}
 	else if ((wParam == WM_SYSKEYUP) || (wParam == WM_KEYUP))
 	{
 		if (hooked.vkCode == VK_LSHIFT || hooked.vkCode == VK_RSHIFT)
 		{
-			shiftPressed = false;
+			m_shiftPressed = false;
 		}
 		else if (hooked.vkCode == VK_CAPITAL)
 		{
-			capsLockOn = false;
+			m_capsLockOn = false;
+		}
+		else if ((hooked.vkCode >= VK_LCONTROL) && (hooked.vkCode <= VK_RCONTROL))
+		{
+			m_controlPressed = false;
 		}
 	}
 
